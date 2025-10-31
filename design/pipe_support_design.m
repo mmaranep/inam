@@ -69,7 +69,7 @@ function results = pipe_support_design(userInputs)
     props = computeSectionProperties(params);
 
     % Load effects -----------------------------------------------------------
-    loads = assembleLoads(params, props);
+    loads = assembleLoads(params);
 
     % Structural checks ------------------------------------------------------
     post      = checkPost(params, props, loads);
@@ -214,7 +214,7 @@ function props = computeSectionProperties(params)
 end
 
 % -------------------------------------------------------------------------
-function loads = assembleLoads(params, props)
+function loads = assembleLoads(params)
     loads = struct();
 
     pipeOD = params.pipe.outsideDiameter_mm / 1000;
