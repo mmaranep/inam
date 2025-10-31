@@ -39,9 +39,9 @@ FS_bearing_min = 3.0;
 
 %% CALCULATIONS
 
-fprintf('='*60); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 60));
 fprintf('RETAINING WALL GLOBAL STABILITY ANALYSIS\n');
-fprintf('='*60); fprintf('\n\n');
+fprintf('%s\n\n', repmat('=', 1, 60));
 
 % Convert angles to radians
 phi_rad = deg2rad(phi);
@@ -227,12 +227,12 @@ fprintf('\n');
 
 %% 8. GLOBAL STABILITY SUMMARY
 
-fprintf('='*60); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 60));
 fprintf('STABILITY SUMMARY\n');
-fprintf('='*60); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 60));
 
 fprintf('Check                    FS Required    FS Actual    Status\n');
-fprintf('-'*60); fprintf('\n');
+fprintf('%s\n', repmat('-', 1, 60));
 
 fprintf('Overturning             %.2f          %.2f        ', ...
         FS_overturning_min, FS_overturning);
@@ -265,7 +265,7 @@ else
     fprintf('[FAIL]\n');
 end
 
-fprintf('='*60); fprintf('\n\n');
+fprintf('%s\n\n', repmat('=', 1, 60));
 
 % Overall stability verdict
 all_checks_pass = (FS_overturning >= FS_overturning_min) && ...

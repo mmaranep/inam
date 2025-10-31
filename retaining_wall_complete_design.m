@@ -63,10 +63,10 @@ bar_areas = [100, 200, 300, 500, 700, 1000];
 % =========================================================================
 
 fprintf('\n');
-fprintf('?'*80); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 80));
 fprintf('?  RETAINING WALL COMPLETE DESIGN                                            ?\n');
 fprintf('?  PART A: GLOBAL STABILITY ANALYSIS                                         ?\n');
-fprintf('?'*80); fprintf('\n\n');
+fprintf('%s\n\n', repmat('=', 1, 80));
 
 % Convert angles to radians
 phi_rad = deg2rad(phi);
@@ -198,22 +198,22 @@ end
 % Overall stability verdict
 stability_ok = pass_overturning && pass_sliding && pass_bearing && pass_middle_third;
 
-fprintf('?'*80); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 80));
 if stability_ok
     fprintf('STABILITY VERDICT: ALL CHECKS PASSED ???\n');
 else
     fprintf('STABILITY VERDICT: DESIGN REQUIRES REVISION ?\n');
 end
-fprintf('?'*80); fprintf('\n\n');
+fprintf('%s\n\n', repmat('=', 1, 80));
 
 %% ========================================================================
 %                  PART B: STRUCTURAL DESIGN (CSA A23.3-19)
 % =========================================================================
 
 fprintf('\n');
-fprintf('?'*80); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 80));
 fprintf('?  PART B: STRUCTURAL DESIGN (CSA A23.3-19)                                  ?\n');
-fprintf('?'*80); fprintf('\n\n');
+fprintf('%s\n\n', repmat('=', 1, 80));
 
 % Stress block parameters
 alpha1 = max(0.85 - 0.0015 * fc_prime, 0.67);
@@ -228,9 +228,9 @@ fprintf('  ?_min = %.5f\n\n', rho_min);
 
 %% B1. STEM DESIGN
 
-fprintf('?'*80); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 80));
 fprintf('B1. STEM DESIGN\n');
-fprintf('?'*80); fprintf('\n\n');
+fprintf('%s\n\n', repmat('=', 1, 80));
 
 % Factored loads
 pa_factored = alpha_D * Ka * gamma_soil * h_stem + alpha_L * Ka * q;
@@ -281,9 +281,9 @@ end
 
 %% B2. TOE SLAB DESIGN
 
-fprintf('?'*80); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 80));
 fprintf('B2. TOE SLAB DESIGN\n');
-fprintf('?'*80); fprintf('\n\n');
+fprintf('%s\n\n', repmat('=', 1, 80));
 
 % Pressure distribution
 q_toe_factored = alpha_D * q_min;
@@ -330,9 +330,9 @@ end
 
 %% B3. HEEL SLAB DESIGN
 
-fprintf('?'*80); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 80));
 fprintf('B3. HEEL SLAB DESIGN\n');
-fprintf('?'*80); fprintf('\n\n');
+fprintf('%s\n\n', repmat('=', 1, 80));
 
 % Loads
 W_soil_heel_factored = alpha_D * gamma_soil * h_stem * t_heel;
@@ -380,9 +380,9 @@ end
 
 %% B4. DEVELOPMENT LENGTH
 
-fprintf('?'*80); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 80));
 fprintf('B4. DEVELOPMENT LENGTH (CSA A23.3 Cl. 12)\n');
-fprintf('?'*80); fprintf('\n\n');
+fprintf('%s\n\n', repmat('=', 1, 80));
 
 k1 = 1.0; k2 = 1.0; k3 = 1.0; k4 = 0.8;
 ld_factor = k1 * k2 * k3 * k4 * fy / (1.0 * sqrt(fc_prime) * 1.15);
@@ -424,9 +424,9 @@ end
 % =========================================================================
 
 fprintf('\n');
-fprintf('?'*80); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 80));
 fprintf('?  FINAL DESIGN SUMMARY                                                      ?\n');
-fprintf('?'*80); fprintf('\n\n');
+fprintf('%s\n\n', repmat('=', 1, 80));
 
 fprintf('GEOMETRY:\n');
 fprintf('  Wall height (H) = %.2f m\n', H);
@@ -466,9 +466,9 @@ else
 end
 
 fprintf('\n');
-fprintf('?'*80); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 80));
 fprintf('Design completed per CSA A23.3-19\n');
-fprintf('?'*80); fprintf('\n\n');
+fprintf('%s\n\n', repmat('=', 1, 80));
 
 %% VISUALIZATION
 

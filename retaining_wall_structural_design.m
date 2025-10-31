@@ -48,9 +48,9 @@ bar_areas = [100, 200, 300, 500, 700, 1000]; % mm?
 
 %% PRELIMINARY CALCULATIONS
 
-fprintf('='*70); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 70));
 fprintf('RETAINING WALL STRUCTURAL DESIGN - CSA A23.3-19\n');
-fprintf('='*70); fprintf('\n\n');
+fprintf('%s\n\n', repmat('=', 1, 70));
 
 % Convert angles to radians
 phi_rad = deg2rad(phi);
@@ -68,9 +68,9 @@ fprintf('  Active earth pressure coefficient (Ka) = %.4f\n\n', Ka);
 
 %% PART 1: STEM DESIGN
 
-fprintf('='*70); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 70));
 fprintf('STEM DESIGN\n');
-fprintf('='*70); fprintf('\n\n');
+fprintf('%s\n\n', repmat('=', 1, 70));
 
 % Design at base of stem (critical section)
 h_stem = H - t_base;  % Height of stem
@@ -224,9 +224,9 @@ end
 
 %% PART 2: BASE SLAB DESIGN (TOE)
 
-fprintf('='*70); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 70));
 fprintf('TOE SLAB DESIGN\n');
-fprintf('='*70); fprintf('\n\n');
+fprintf('%s\n\n', repmat('=', 1, 70));
 
 % Calculate bearing pressure distribution
 % First, find resultant and eccentricity from stability analysis
@@ -363,9 +363,9 @@ end
 
 %% PART 3: BASE SLAB DESIGN (HEEL)
 
-fprintf('='*70); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 70));
 fprintf('HEEL SLAB DESIGN\n');
-fprintf('='*70); fprintf('\n\n');
+fprintf('%s\n\n', repmat('=', 1, 70));
 
 fprintf('HEEL SLAB:\n');
 fprintf('  Heel length = %.2f m\n', t_heel);
@@ -474,9 +474,9 @@ end
 
 %% DEVELOPMENT LENGTH (CSA A23.3 Cl. 12)
 
-fprintf('='*70); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 70));
 fprintf('DEVELOPMENT LENGTH CHECK (CSA A23.3 Cl. 12)\n');
-fprintf('='*70); fprintf('\n\n');
+fprintf('%s\n\n', repmat('=', 1, 70));
 
 % Basic development length (CSA A23.3 Cl. 12.2.3)
 k1 = 1.0;  % Bar location factor (other than top bars)
@@ -528,9 +528,9 @@ end
 
 %% CRACK CONTROL (CSA A23.3 Cl. 10.6)
 
-fprintf('='*70); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 70));
 fprintf('CRACK CONTROL CHECK (CSA A23.3 Cl. 10.6)\n');
-fprintf('='*70); fprintf('\n\n');
+fprintf('%s\n\n', repmat('=', 1, 70));
 
 % Service load moments (unfactored with load factors = 1.0)
 % For exposure class N or S, z ? 30000 N/mm for interior exposure
@@ -559,9 +559,9 @@ end
 
 %% TEMPERATURE AND SHRINKAGE REINFORCEMENT
 
-fprintf('='*70); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 70));
 fprintf('TEMPERATURE AND SHRINKAGE REINFORCEMENT\n');
-fprintf('='*70); fprintf('\n\n');
+fprintf('%s\n\n', repmat('=', 1, 70));
 
 % CSA A23.3 Cl. 7.8 - Minimum 0.002 of gross cross-sectional area
 As_temp_stem = 0.002 * t_stem * 1000 * 1000;  % mm?/m
@@ -577,9 +577,9 @@ fprintf('  Provide: 10M @ 300 mm c/c (Area = %.1f mm?/m)\n\n', 100*1000/300);
 
 %% DESIGN SUMMARY
 
-fprintf('='*70); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 70));
 fprintf('REINFORCEMENT SUMMARY\n');
-fprintf('='*70); fprintf('\n\n');
+fprintf('%s\n\n', repmat('=', 1, 70));
 
 fprintf('STEM:\n');
 fprintf('  Vertical (tension face):    %dM @ %d mm c/c\n', bar_dia_stem, spacing_stem);
@@ -724,6 +724,6 @@ grid on;
 
 sgtitle('RETAINING WALL STRUCTURAL DESIGN - CSA A23.3-19', 'FontSize', 14, 'FontWeight', 'bold');
 
-fprintf('='*70); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 70));
 fprintf('STRUCTURAL DESIGN COMPLETE\n');
-fprintf('='*70); fprintf('\n');
+fprintf('%s\n', repmat('=', 1, 70));
