@@ -61,6 +61,17 @@ geom.stemCL           = geom.toeWidth;
 geom.baseTopElevation = geom.baseThk;
 geom.stemLeft         = geom.stemCL - geom.stemThk/2;
 geom.stemRight        = geom.stemCL + geom.stemThk/2;
+geom.floorSlab.angleRad        = deg2rad(geom.floorSlab.slopeDeg);
+geom.floorSlab.horizontalProj  = geom.floorSlab.span * cos(geom.floorSlab.angleRad);
+geom.floorSlab.verticalDrop    = geom.floorSlab.span * sin(geom.floorSlab.angleRad);
+geom.floorSlab.startX          = geom.baseWidth;
+geom.floorSlab.endX            = geom.floorSlab.startX + geom.floorSlab.horizontalProj;
+geom.floorSlab.topStartZ       = geom.baseTopElevation;
+geom.floorSlab.topEndZ         = geom.floorSlab.topStartZ - geom.floorSlab.verticalDrop;
+geom.floorSlab.centroidX       = geom.floorSlab.startX + geom.floorSlab.horizontalProj/2 ...
+                                 - (geom.floorSlab.thk/2) * sin(geom.floorSlab.angleRad);
+geom.floorSlab.centroidZ       = geom.floorSlab.topStartZ - geom.floorSlab.verticalDrop/2 ...
+                                 - (geom.floorSlab.thk/2) * cos(geom.floorSlab.angleRad);
 
 %% -------------------------------------------------------------------------
 %  GRAVITY LOAD COMPONENTS
@@ -94,11 +105,13 @@ components = addComponent(components, "Roof slab tributary load", ...
     mat.gammaConcrete * geom.roof.thk * geom.roof.tributarySpan, geom.stemCL, ...
     "Roof weight carried by stem");
 
-if geom.floorSlabThk > 0
-    components = addComponent(components, "Heel floor slab (optional)", ...
-        mat.gammaConcrete * geom.floorSlabThk * geom.floorSlabWidth, ...
-        geom.stemCL + geom.heelWidth / 2, ...
-        "Adjust thickness if present");
+if geom.floorSlab.thk > 0 && geom.floorSlab.span > 0
+    floorSlabVolume   = geom.floorSlab.thk * geom.floorSlab.span;
+    floorSlabWeight   = mat.gammaConcrete * floorSlabVolume;
+    floorSlabLeverArm = geom.floorSlab.centroidX;
+    components = addComponent(components, "Sloped heel floor slab", ...
+        floorSlabWeight, floorSlabLeverArm, ...
+        sprintf('%.0f mm thick, %.1f m @ %.0f deg', geom.floorSlab.thk*1e3, geom.floorSlab.span, geom.floorSlab.slopeDeg));
 end
 
 weights     = [components.Weight]';
@@ -211,6 +224,10 @@ fprintf('Stem height              : %.3f m\n', geom.stemHeight);
 fprintf('Water depth at heel      : %.3f m\n', loads.waterDepth);
 fprintf('Assumed base thickness   : %.0f mm\n', geom.baseThk * 1e3);
 fprintf('Assumed stem thickness   : %.0f mm\n\n', geom.stemThk * 1e3);
+fprintf('Heel floor slab          : %.2f m @ %.0f deg (thk %.0f mm)\n', ...
+    geom.floorSlab.span, geom.floorSlab.slopeDeg, geom.floorSlab.thk * 1e3);
+fprintf('  Horizontal projection  : %.2f m | Vertical drop %.2f m\n\n', ...
+    geom.floorSlab.horizontalProj, geom.floorSlab.verticalDrop);
 
 fprintf('Total dead load          : %.2f kN/m\n', W_total);
 fprintf('Hydrostatic thrust       : %.2f kN/m\n', hydro.thrust);
@@ -306,6 +323,22 @@ waterPoly = [geom.stemRight,           geom.baseTopElevation;
              geom.stemRight + 0.35,    geom.baseTopElevation];
 patch(waterPoly(:,1), waterPoly(:,2), [0.70 0.80 0.95], 'FaceAlpha', 0.6, 'EdgeColor', [0.3 0.4 0.7]);
 
+% Sloped heel floor slab
+floorPoly = [];
+if geom.floorSlab.thk > 0 && geom.floorSlab.span > 0
+    slopeVec  = [cos(geom.floorSlab.angleRad), -sin(geom.floorSlab.angleRad)];
+    normalVec = [sin(geom.floorSlab.angleRad),  cos(geom.floorSlab.angleRad)];
+    floorP1   = [geom.floorSlab.startX, geom.floorSlab.topStartZ];
+    floorP2   = floorP1 + geom.floorSlab.span * slopeVec;
+    floorP3   = floorP2 - geom.floorSlab.thk * normalVec;
+    floorP4   = floorP1 - geom.floorSlab.thk * normalVec;
+    floorPoly = [floorP1; floorP2; floorP3; floorP4];
+    patch(floorPoly(:,1), floorPoly(:,2), [0.82 0.82 0.84], 'EdgeColor', 'k');
+    text(mean(floorPoly(:,1)), mean(floorPoly(:,2)), 'Heel floor slab', ...
+        'Rotation', -geom.floorSlab.slopeDeg, 'HorizontalAlignment', 'center', ...
+        'VerticalAlignment', 'middle', 'Color', [0.3 0.3 0.3]);
+end
+
 % Hydrostatic pressure diagram
 pressureScale = 0.012; % m per kPa for plotting
 pressureAtBase = mat.gammaWater * loads.waterDepth;
@@ -326,8 +359,16 @@ title('Wall Elevation & Hydrostatic Actions');
 xlabel('Horizontal distance from toe (m)');
 ylabel('Elevation (m)');
 grid on;
-xlim([gutterLeft - 0.4, geom.baseWidth + 0.5]);
-ylim([-geom.keyDepth - 0.2, geom.baseTopElevation + geom.stemHeight + 0.4]);
+
+xlimLeft = min([0, gutterLeft]) - 0.4;
+xlimRight = max([geom.baseWidth, geom.floorSlab.endX]) + 0.5;
+xlim([xlimLeft, xlimRight]);
+
+ylimLower = -geom.keyDepth - 0.2;
+if ~isempty(floorPoly)
+    ylimLower = min(ylimLower, min(floorPoly(:,2)) - 0.2);
+end
+ylim([ylimLower, geom.baseTopElevation + geom.stemHeight + 0.4]);
 
 % Stability summary plots -------------------------------------------------
 figure('Name', 'CSA Stability Summary', 'Color', 'w');
