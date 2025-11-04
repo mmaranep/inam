@@ -33,9 +33,9 @@ geom.gutter.vertThk        = 150 * mm;
 geom.roof.thk           = 225 * mm;
 geom.roof.tributarySpan = 2.75; % m
 
-% Optional heel floor slab weight (set thickness > 0 to include)
-geom.floorSlabThk   = 0.0;      % m
-geom.floorSlabWidth = geom.heelWidth;
+geom.floorSlab.thk       = 250 * mm;  % slab thickness (normal to slab plane)
+geom.floorSlab.span      = 8.6;       % sloped length from heel
+geom.floorSlab.slopeDeg  = 20;        % downward away from wall
 
 % Hydrostatic loading
 loads.waterDepth = 1600 * mm;   % measured from heel slab surface
