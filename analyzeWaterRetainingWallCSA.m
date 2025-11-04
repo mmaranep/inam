@@ -24,6 +24,9 @@ results = evaluateStability(loads, input);
 reportLoads(loads);
 reportResults(results);
 
+plotWallGeometry(input, loads);
+plotResults(results, input);
+
 %% --- Helper Functions --------------------------------------------------
 
 function input = getDefaultInput()
@@ -217,7 +220,7 @@ function results = evaluateStability(loads, input)
     FS_sliding = sliding_resistance / H_total;
 
     % Bearing pressures
-    base_width = geom.toe_width + geom.stem_thickness_base + geom.heel_width;
+    base_width = getBaseWidth(geom);
     area = base_width * 1.0; % per metre length
 
     net_moment_toe = Mr - Mo;
@@ -325,4 +328,182 @@ end
 
 function val = kPa(value)
     val = value; % 1 kN/m^2 equals 1 kPa
+end
+
+function plotWallGeometry(input, loads)
+    geom = input.geometry;
+    loading = input.loading;
+    hydro = loads.hydrostatic;
+
+    base_width = getBaseWidth(geom);
+
+    stem_base_left = geom.toe_width;
+    stem_base_right = stem_base_left + geom.stem_thickness_base;
+    stem_top_height = geom.base_thickness + geom.stem_height;
+    stem_top_left = stem_base_left + (geom.stem_thickness_base - geom.stem_thickness_top) / 2;
+    stem_top_right = stem_top_left + geom.stem_thickness_top;
+
+    figure('Name','Wall Geometry','Color','w');
+    hold on;
+    axis equal;
+    grid on;
+
+    handles = gobjects(0);
+    labels = strings(0);
+
+    % Footing
+    footing_x = [0, base_width, base_width, 0];
+    footing_y = [0, 0, geom.base_thickness, geom.base_thickness];
+    h = patch(footing_x, footing_y, [0.85 0.85 0.85], 'EdgeColor', 'k');
+    handles(end+1) = h; %#ok<AGROW>
+    labels(end+1) = "Footing"; %#ok<AGROW>
+
+    % Stem
+    stem_x = [stem_base_left, stem_base_right, stem_top_right, stem_top_left];
+    stem_y = [geom.base_thickness, geom.base_thickness, stem_top_height, stem_top_height];
+    h = patch(stem_x, stem_y, [0.75 0.75 0.75], 'EdgeColor', 'k');
+    handles(end+1) = h; %#ok<AGROW>
+    labels(end+1) = "Stem"; %#ok<AGROW>
+
+    % Shear key
+    if geom.shear_key_depth > 0 && geom.shear_key_width > 0
+        key_left = geom.shear_key_offset;
+        key_right = key_left + geom.shear_key_width;
+        key_y = -geom.shear_key_depth;
+        key_x = [key_left, key_right, key_right, key_left];
+        key_z = [0, 0, key_y, key_y];
+        h = patch(key_x, key_z, [0.70 0.70 0.70], 'EdgeColor', 'k');
+        handles(end+1) = h; %#ok<AGROW>
+        labels(end+1) = "Shear Key"; %#ok<AGROW>
+    end
+
+    % Roof slab (projected through stem width)
+    roof = geom.roof;
+    roof_bottom = stem_top_height;
+    roof_top = roof_bottom + roof.thickness;
+    roof_x = [stem_top_left, stem_top_right, stem_top_right, stem_top_left];
+    roof_y = [roof_bottom, roof_bottom, roof_top, roof_top];
+    h = patch(roof_x, roof_y, [0.80 0.80 0.85], 'EdgeColor', 'k');
+    handles(end+1) = h; %#ok<AGROW>
+    labels(end+1) = "Roof Slab"; %#ok<AGROW>
+
+    % Gutter (horizontal plate and vertical upstand)
+    gutter = geom.gutter;
+    if gutter.horizontal_projection > 0 && gutter.horizontal_thickness > 0
+        if gutter.orientation == "heel"
+            gutter_base_x = stem_base_right;
+            horizontal_sign = 1;
+        else
+            gutter_base_x = stem_base_left - gutter.horizontal_projection;
+            horizontal_sign = -1;
+        end
+
+        gutter_elevation = geom.base_thickness + geom.stem_height - gutter.depth_from_top;
+        gutter_plate_x = gutter_base_x + [0, gutter.horizontal_projection * horizontal_sign, ...
+            gutter.horizontal_projection * horizontal_sign, 0];
+        gutter_plate_y = [gutter_elevation - gutter.horizontal_thickness, gutter_elevation - gutter.horizontal_thickness, ...
+            gutter_elevation, gutter_elevation];
+        h = patch(gutter_plate_x, gutter_plate_y, [0.80 0.88 0.95], 'EdgeColor', 'k');
+        handles(end+1) = h; %#ok<AGROW>
+        labels(end+1) = "Gutter"; %#ok<AGROW>
+
+        if gutter.vertical_height > 0 && gutter.vertical_thickness > 0
+            if gutter.orientation == "heel"
+                upstand_base_x = gutter_base_x + gutter.horizontal_projection - gutter.vertical_thickness;
+            else
+                upstand_base_x = gutter_base_x;
+            end
+            upstand_x = upstand_base_x + [0, gutter.vertical_thickness * horizontal_sign, ...
+                gutter.vertical_thickness * horizontal_sign, 0];
+            upstand_y = [gutter_elevation, gutter_elevation, gutter_elevation + gutter.vertical_height, gutter_elevation + gutter.vertical_height];
+            h = patch(upstand_x, upstand_y, [0.80 0.88 0.95], 'EdgeColor', 'k');
+            handles(end+1) = h; %#ok<AGROW>
+            labels(end+1) = "Gutter Upstand"; %#ok<AGROW>
+        end
+    end
+
+    % Retained water wedge on heel side
+    water_depth = loading.water_depth;
+    if water_depth > 0
+        water_x = [stem_base_right, stem_base_right + geom.heel_width, stem_base_right + geom.heel_width, stem_base_right];
+        water_y = [geom.base_thickness, geom.base_thickness, geom.base_thickness + water_depth, geom.base_thickness + water_depth];
+        h = patch(water_x, water_y, [0.6 0.75 0.95], 'EdgeColor', 'none', 'FaceAlpha', 0.6);
+        handles(end+1) = h; %#ok<AGROW>
+        labels(end+1) = "Water"; %#ok<AGROW>
+
+        % Hydrostatic resultant arrow (scaled for clarity)
+        arrow_scale = max(base_width, stem_top_height) * 0.35;
+        arrow_length = min(hydro.force / 50, arrow_scale);
+        quiver(stem_base_right, geom.base_thickness + water_depth/3, -arrow_length, 0, ...
+            'AutoScale','off','MaxHeadSize', 2, 'LineWidth', 1.5, 'Color', [0 0.2 0.6]);
+        text(stem_base_right - arrow_length * 0.5, geom.base_thickness + water_depth/3 + 0.1, ...
+            sprintf('Hydro: %.1f kN/m', hydro.force), 'Color', [0 0.2 0.6], 'FontSize', 9, 'HorizontalAlignment', 'center');
+    end
+
+    xlabel('Horizontal (m)');
+    ylabel('Vertical (m)');
+    title('Water-Retaining Wall Geometry');
+
+    ylim([-geom.shear_key_depth - 0.2, roof_top + roof.thickness + 0.5]);
+    xlim([-0.3*geom.toe_width, base_width + 0.5*geom.heel_width]);
+
+    if ~isempty(handles)
+        legend(handles, labels, 'Location','northoutside', 'Orientation','horizontal');
+    end
+    hold off;
+end
+
+function plotResults(results, input)
+    figure('Name','Stability Results','Color','w');
+
+    % Factors of safety comparison
+    subplot(1,2,1);
+    FS_actual = [results.overturning.FS, results.sliding.FS, results.bearing.FS];
+    FS_required = [results.overturning.FS_required, results.sliding.FS_required, 1.0];
+    bar_data = [FS_actual(:), FS_required(:)];
+    bar_handle = bar(bar_data, 'grouped'); %#ok<NASGU>
+    hold on;
+    yline(1.0, '--k', 'Unity', 'LabelHorizontalAlignment','left');
+    grid on;
+    set(gca,'XTickLabel',{'Overturning','Sliding','Bearing'});
+    ylabel('Factor of Safety');
+    legend({'Actual','Required'}, 'Location','northoutside','Orientation','horizontal');
+    title('Factors of Safety (CSA-informed)');
+    hold off;
+
+    % Bearing pressure distribution along base
+    subplot(1,2,2);
+    [x_base, q_profile] = basePressureProfile(results, input);
+    area(x_base, kPa(q_profile), 'FaceColor', [0.65 0.81 0.89], 'EdgeColor', [0 0.35 0.60], 'LineWidth', 1.5);
+    grid on;
+    xlabel('Distance from Toe (m)');
+    ylabel('Bearing Pressure (kPa)');
+    title('Base Contact Pressure Profile');
+    q_vals = kPa(q_profile);
+    y_max = max(q_vals);
+    y_min = min(q_vals);
+    if abs(y_max - y_min) < 1e-6
+        y_text = y_max;
+    else
+        y_text = y_max - 0.05*(y_max - y_min);
+    end
+    text(mean(x_base), y_text, ...
+        sprintf('q_{max} = %.0f kPa\nq_{min} = %.0f kPa', kPa(results.bearing.q_max), kPa(results.bearing.q_min)), ...
+        'HorizontalAlignment','center', 'VerticalAlignment','top');
+end
+
+function [x, q] = basePressureProfile(results, input)
+    base_width = getBaseWidth(input.geometry);
+    e = results.bearing.eccentricity;
+    q_avg = results.bearing.q_avg;
+
+    q_toe = q_avg * (1 + 6*e/base_width);
+    q_heel = q_avg * (1 - 6*e/base_width);
+
+    x = [0, base_width];
+    q = [q_toe, q_heel];
+end
+
+function width = getBaseWidth(geom)
+    width = geom.toe_width + geom.stem_thickness_base + geom.heel_width;
 end
