@@ -179,21 +179,28 @@ if ~isempty(valid_idx)
     
     % Fillet weld size for web-to-flange connection
     % Based on thinner part thickness
-    min_weld = min(tw, flange_thickness);
+    thinner_plate = min(tw, flange_thickness);
     
-    if min_weld <= 6
-        weld_size = 3; % mm
-    elseif min_weld <= 12
-        weld_size = 5; % mm
-    elseif min_weld <= 20
-        weld_size = 6; % mm
+    % Minimum weld size per CSA W59 Table 4.4
+    if thinner_plate <= 6
+        min_fillet = 3; % mm
+    elseif thinner_plate <= 12
+        min_fillet = 5; % mm
+    elseif thinner_plate <= 20
+        min_fillet = 6; % mm
     else
-        weld_size = 10; % mm
+        min_fillet = 10; % mm
     end
+    
+    % Maximum fillet weld size (CSA W59 Clause 4.2.7.3)
+    % Limit to thinner plate thickness minus 1.5 mm when fusion to root is not ensured.
+    % Also cap to practical maximum of 25 mm to avoid unrealistic selections.
+    max_fillet = max(min(thinner_plate - 1.5, 25), min_fillet);
     
     % Check weld strength
     % Assuming E49XX electrodes (Xu = 490 MPa)
     Xu = 490; % Ultimate strength of weld metal
+    throat_factor = 0.707; % Effective throat = 0.707 * weld size for fillet welds
     
     % Calculate required weld strength per unit length
     % Shear flow at web-flange junction
@@ -203,20 +210,38 @@ if ~isempty(valid_idx)
     % Required weld strength (both sides of web)
     weld_required = VQ_I / 2; % N/mm per side
     
-    % Weld resistance per unit length
-    weld_resistance = phi_w * 0.707 * weld_size * Xu; % N/mm
+    % Determine weld size required to satisfy strength
+    weld_size_required = weld_required / (phi_w * throat_factor * Xu);
     
-    fprintf('Minimum Fillet Weld Size: %d mm\n', weld_size);
+    % Provide 10% reserve capacity (round up to nearest millimetre)
+    weld_size_target = ceil(1.10 * weld_size_required);
+    
+    % Select weld size within permitted range
+    weld_size = max(min_fillet, weld_size_target);
+    weld_size = min(weld_size, max_fillet);
+    
+    % Weld resistance per unit length with selected size
+    weld_resistance = phi_w * throat_factor * weld_size * Xu; % N/mm
+    weld_utilization = weld_required / weld_resistance;
+    
+    fprintf('Thinner plate thickness: %.1f mm\n', thinner_plate);
+    fprintf('Fillet weld size (selected): %d mm\n', weld_size);
     fprintf('Required Weld Strength: %.2f N/mm\n', weld_required);
     fprintf('Weld Resistance: %.2f N/mm\n', weld_resistance);
-    fprintf('Weld Utilization: %.1f%%\n', weld_required/weld_resistance * 100);
+    fprintf('Weld Utilization: %.1f%%\n', weld_utilization * 100);
     
-    % Intermittent welding check
-    if weld_required < 0.5 * weld_resistance
-        max_spacing = min(24 * min_weld, 300); % mm
+    if weld_size >= max_fillet && weld_utilization > 1
+        fprintf('*** WARNING: Weld capacity shortfall even at maximum permissible size. Consider design changes. ***\n');
+    end
+    
+    % Intermittent welding check (CSA W59 Clause 4.6)
+    if weld_utilization <= 0.5
+        max_spacing = min(24 * thinner_plate, 300); % mm
         fprintf('Intermittent welding acceptable with max spacing: %d mm\n', max_spacing);
+        weld_type = 'Intermittent';
     else
-        fprintf('Continuous welding required\n');
+        fprintf('Continuous welding adopted to satisfy strength.\n');
+        weld_type = 'Continuous';
     end
 end
 
@@ -346,11 +371,7 @@ if ~isempty(valid_idx)
     
     fprintf('\nWELDING:\n');
     fprintf('- Fillet weld size: %d mm\n', weld_size);
-    if weld_required < 0.5*weld_resistance
-        fprintf('- Type: Intermittent\n');
-    else
-        fprintf('- Type: Continuous\n');
-    end
+    fprintf('- Type: %s\n', weld_type);
 end
 
 %% Function Definitions
