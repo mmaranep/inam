@@ -1,0 +1,529 @@
+%% CSA S16-24 Compliant Plate-Built T-Section Design
+% Design of multi-web T-section for cantilever with point load
+% According to CSA S16-24 requirements for singly symmetric sections
+
+clear all; close all; clc;
+
+%% Input Parameters
+% Loading conditions
+P = 246000; % Point load in N (246 kN)
+L = 0.8; % Cantilever span in m
+a = 0.15; % Distance of point load from free end in m
+
+% Material properties (assuming Grade 350W steel)
+Fy = 350; % Yield strength in MPa
+E = 200000; % Elastic modulus in MPa
+G = 77000; % Shear modulus in MPa
+
+% Design constraints
+max_depth = 82; % Maximum total depth in mm
+deflection_limit = 0.05; % Maximum deflection in mm
+flange_thickness = 32; % Flange thickness in mm
+total_width = 1000; % Total width of T-section in mm
+
+% Resistance factors (CSA S16-24)
+phi = 0.90; % Resistance factor for bending
+phi_w = 0.67; % Resistance factor for welding
+
+%% Calculate Maximum Moment and Shear
+% Maximum moment occurs at fixed support
+M_max = P * (L - a) * 1000; % N-mm (Point load at 0.95m from support)
+V_max = P; % Maximum shear force in N
+
+fprintf('=== LOADING ANALYSIS ===\n');
+fprintf('Maximum Moment: %.2f kN-m\n', M_max/1e6);
+fprintf('Maximum Shear: %.2f kN\n', V_max/1000);
+
+%% Required Section Modulus
+% Using elastic design approach initially
+S_required = M_max / (phi * Fy); % mm³
+
+fprintf('\n=== REQUIRED SECTION PROPERTIES ===\n');
+fprintf('Required Section Modulus (S): %.2f × 10^6 mm³\n', S_required/1e6);
+
+%% Design Multi-Web T-Section
+% Geometry optimization
+web_height = max_depth - flange_thickness; % mm
+num_webs = 5; % Increased number of webs for better stiffness
+web_spacing = total_width / (num_webs - 1); % Spacing between webs
+
+% Web thickness optimization (iterative process)
+web_thickness_options = [10, 12, 14, 16, 20, 25, 30, 32, 36, 40]; % Extended range of plate thicknesses
+
+fprintf('\n=== T-SECTION GEOMETRY OPTIMIZATION ===\n');
+fprintf('Evaluating web configurations...\n\n');
+
+% Initialize results storage
+results = [];
+
+for tw = web_thickness_options
+    % Calculate section properties
+    [props] = calculate_T_section_properties(flange_thickness, total_width, ...
+        web_height, tw, num_webs, web_spacing);
+    
+    % Check section classification per CSA S16-24
+    [class, checks] = check_section_class_CSA(flange_thickness, total_width, ...
+        web_height, tw, num_webs, Fy, props);
+    
+    % Calculate moment resistance
+    if class <= 2
+        % Class 1 or 2: Plastic moment resistance
+        Mr = phi * props.Zx * Fy / 1e6; % kN-m
+    else
+        % Class 3: Elastic moment resistance
+        Mr = phi * props.Sx * Fy / 1e6; % kN-m
+    end
+    
+    % Calculate deflection
+    delta = calculate_deflection(P, L, a, E, props.Ix);
+    
+    % Store results
+    results = [results; tw, props.Sx/1e6, props.Zx/1e6, props.Ix/1e9, ...
+        class, Mr, delta, props.y_bar];
+end
+
+% Display results table
+fprintf('Web_t(mm) | Sx(×10^6mm³) | Zx(×10^6mm³) | Ix(×10^9mm⁴) | Class | Mr(kN-m) | δ(mm) | ȳ(mm)\n');
+fprintf('----------|--------------|--------------|--------------|-------|----------|-------|------\n');
+for i = 1:size(results, 1)
+    fprintf('%9.0f | %12.2f | %12.2f | %12.3f | %5.0f | %8.2f | %5.3f | %5.1f\n', results(i,:));
+end
+
+%% Select Optimal Section
+% Find sections that meet all requirements
+valid_idx = find(results(:,6) >= M_max/1e6 & results(:,7) <= deflection_limit);
+
+fprintf('\n=== CONSTRAINT EVALUATION ===\n');
+fprintf('Required Moment Capacity: %.2f kN-m\n', M_max/1e6);
+fprintf('Required Deflection Limit: %.3f mm\n', deflection_limit);
+
+% Show why sections are failing
+if isempty(valid_idx)
+    fprintf('\n*** No section meets all requirements simultaneously ***\n');
+    fprintf('\nAnalyzing constraints:\n');
+    
+    % Check moment capacity
+    moment_ok = results(:,6) >= M_max/1e6;
+    fprintf('- Sections meeting moment requirement: %d of %d\n', sum(moment_ok), length(moment_ok));
+    
+    % Check deflection
+    deflection_ok = results(:,7) <= deflection_limit;
+    fprintf('- Sections meeting deflection requirement: %d of %d\n', sum(deflection_ok), length(deflection_ok));
+    
+    % Find best compromise
+    fprintf('\n*** BEST AVAILABLE OPTIONS ***\n');
+    fprintf('(Showing sections that meet moment requirement)\n\n');
+    
+    moment_valid_idx = find(moment_ok);
+    if ~isempty(moment_valid_idx)
+        [min_defl, best_idx] = min(results(moment_valid_idx, 7));
+        best_overall_idx = moment_valid_idx(best_idx);
+        
+        fprintf('RECOMMENDED SECTION (relaxed deflection):\n');
+        fprintf('- Web thickness: %d mm\n', web_thickness_options(best_overall_idx));
+        fprintf('- Moment capacity: %.2f kN-m (OK)\n', results(best_overall_idx, 6));
+        fprintf('- Actual deflection: %.3f mm\n', results(best_overall_idx, 7));
+        fprintf('- Deflection ratio: L/%.0f\n', L*1000/results(best_overall_idx, 7));
+        
+        % Try with relaxed deflection limit
+        relaxed_deflection_limit = results(best_overall_idx, 7) * 1.1; % 10% margin
+        fprintf('\nSuggested deflection limit: %.3f mm (L/%.0f)\n', relaxed_deflection_limit, L*1000/relaxed_deflection_limit);
+    end
+end
+
+if ~isempty(valid_idx)
+    % Select minimum weight option
+    selected_idx = valid_idx(1);
+    selected_web_t = web_thickness_options(selected_idx);
+    
+    fprintf('\n=== SELECTED DESIGN ===\n');
+    fprintf('Flange: %d mm × %d mm\n', total_width, flange_thickness);
+    fprintf('Web: %d webs of %d mm × %d mm\n', num_webs, selected_web_t, web_height);
+    fprintf('Section Class: %d\n', results(selected_idx, 5));
+    fprintf('Moment Resistance: %.2f kN-m (Required: %.2f kN-m)\n', ...
+        results(selected_idx, 6), M_max/1e6);
+    fprintf('Maximum Deflection: %.3f mm (Limit: %.3f mm)\n', ...
+        results(selected_idx, 7), deflection_limit);
+else
+    fprintf('\n*** WARNING: No valid section found with strict deflection limit. ***\n');
+    fprintf('*** Using best available section - see recommendations above ***\n');
+    
+    % Use the best available section for remaining calculations if exists
+    moment_valid_idx = find(results(:,6) >= M_max/1e6);
+    if ~isempty(moment_valid_idx)
+        [~, best_idx] = min(results(moment_valid_idx, 7));
+        valid_idx = moment_valid_idx(best_idx);
+        selected_web_t = web_thickness_options(valid_idx);
+    end
+end
+
+%% Shear Check
+if ~isempty(valid_idx)
+    tw = selected_web_t;
+    Aw = num_webs * tw * web_height; % Total web area
+    Vr = 0.66 * phi * Aw * Fy / 1000; % Shear resistance in kN
+    
+    fprintf('\n=== SHEAR CHECK ===\n');
+    fprintf('Shear Resistance: %.2f kN\n', Vr);
+    fprintf('Applied Shear: %.2f kN\n', V_max/1000);
+    fprintf('Utilization: %.1f%%\n', (V_max/1000)/Vr * 100);
+    
+    if Vr < V_max/1000
+        fprintf('*** WARNING: Shear capacity insufficient! ***\n');
+    end
+end
+
+%% Welding Design
+if ~isempty(valid_idx)
+    fprintf('\n=== WELDING REQUIREMENTS (CSA W59) ===\n');
+    
+    % Fillet weld size for web-to-flange connection
+    % Based on thinner part thickness
+    min_weld = min(tw, flange_thickness);
+    
+    if min_weld <= 6
+        weld_size = 3; % mm
+    elseif min_weld <= 12
+        weld_size = 5; % mm
+    elseif min_weld <= 20
+        weld_size = 6; % mm
+    else
+        weld_size = 10; % mm
+    end
+    
+    % Check weld strength
+    % Assuming E49XX electrodes (Xu = 490 MPa)
+    Xu = 490; % Ultimate strength of weld metal
+    
+    % Calculate required weld strength per unit length
+    % Shear flow at web-flange junction
+    Q = (flange_thickness * total_width * (web_height/2 + flange_thickness/2));
+    VQ_I = V_max * Q / (results(selected_idx, 4) * 1e9);
+    
+    % Required weld strength (both sides of web)
+    weld_required = VQ_I / 2; % N/mm per side
+    
+    % Weld resistance per unit length
+    weld_resistance = phi_w * 0.707 * weld_size * Xu; % N/mm
+    
+    fprintf('Minimum Fillet Weld Size: %d mm\n', weld_size);
+    fprintf('Required Weld Strength: %.2f N/mm\n', weld_required);
+    fprintf('Weld Resistance: %.2f N/mm\n', weld_resistance);
+    fprintf('Weld Utilization: %.1f%%\n', weld_required/weld_resistance * 100);
+    
+    % Intermittent welding check
+    if weld_required < 0.5 * weld_resistance
+        max_spacing = min(24 * min_weld, 300); % mm
+        fprintf('Intermittent welding acceptable with max spacing: %d mm\n', max_spacing);
+    else
+        fprintf('Continuous welding required\n');
+    end
+end
+
+%% Local Stability Checks
+if ~isempty(valid_idx)
+    fprintf('\n=== LOCAL STABILITY CHECKS (CSA S16-24) ===\n');
+    
+    % Flange slenderness
+    b_f = (total_width - num_webs * tw) / (2 * num_webs); % Outstand of flange
+    lambda_f = b_f / flange_thickness;
+    lambda_f_limit = 145 / sqrt(Fy); % Class 1 limit
+    
+    fprintf('Flange Slenderness (b/t): %.2f\n', lambda_f);
+    fprintf('Class 1 Limit: %.2f\n', lambda_f_limit);
+    
+    if lambda_f <= lambda_f_limit
+        fprintf('Flange: Class 1 - OK\n');
+    elseif lambda_f <= 170/sqrt(Fy)
+        fprintf('Flange: Class 2 - OK\n');
+    elseif lambda_f <= 200/sqrt(Fy)
+        fprintf('Flange: Class 3 - OK\n');
+    else
+        fprintf('Flange: Class 4 - Requires stiffeners!\n');
+    end
+    
+    % Web slenderness in compression
+    h_w = web_height;
+    lambda_w = h_w / tw;
+    
+    % For T-section, neutral axis location affects web classification
+    y_na = results(selected_idx, 8); % Distance from bottom
+    h_c = web_height + flange_thickness - y_na; % Compression zone height
+    
+    if h_c > 0
+        lambda_w_comp = h_c / tw;
+        lambda_w_limit = 1100 / sqrt(Fy); % Class 1 limit for web in compression
+        
+        fprintf('\nWeb Slenderness (h/t): %.2f\n', lambda_w_comp);
+        fprintf('Class 1 Limit: %.2f\n', lambda_w_limit);
+        
+        if lambda_w_comp <= lambda_w_limit
+            fprintf('Web: Class 1 - OK\n');
+        elseif lambda_w_comp <= 1700/sqrt(Fy)
+            fprintf('Web: Class 2 - OK\n');
+        elseif lambda_w_comp <= 1900/sqrt(Fy)
+            fprintf('Web: Class 3 - OK\n');
+        else
+            fprintf('Web: Class 4 - Requires analysis!\n');
+        end
+    end
+end
+
+%% Plot Section
+if ~isempty(valid_idx)
+    figure('Name', 'T-Section Configuration', 'Position', [100, 100, 800, 600]);
+    
+    % Plot cross-section
+    subplot(2,2,1);
+    plot_T_section(flange_thickness, total_width, web_height, selected_web_t, num_webs);
+    title('Cross-Section View');
+    
+    % Plot moment diagram
+    subplot(2,2,2);
+    x = linspace(0, L, 100);
+    M = zeros(size(x));
+    for i = 1:length(x)
+        if x(i) <= L - a
+            M(i) = P * (L - a - x(i)) / 1e6; % kN-m
+        else
+            M(i) = 0;
+        end
+    end
+    plot(x, M, 'b-', 'LineWidth', 2);
+    hold on;
+    plot([0, L], [results(selected_idx, 6), results(selected_idx, 6)], 'r--', 'LineWidth', 1.5);
+    xlabel('Distance from Support (m)');
+    ylabel('Moment (kN-m)');
+    title('Moment Diagram');
+    legend('Applied Moment', 'Moment Capacity', 'Location', 'best');
+    grid on;
+    
+    % Plot deflection curve
+    subplot(2,2,3);
+    x = linspace(0, L, 100);
+    delta = zeros(size(x));
+    for i = 1:length(x)
+        if x(i) <= L - a
+            delta(i) = P * (L - a - x(i))^2 * (3*L - (L - a - x(i))) / (6*E*results(selected_idx, 4)*1e9) * 1000;
+        else
+            delta(i) = P * (L - a)^2 * (3*x(i) - (L - a)) / (6*E*results(selected_idx, 4)*1e9) * 1000;
+        end
+    end
+    plot(x, delta, 'b-', 'LineWidth', 2);
+    hold on;
+    plot([0, L], [deflection_limit, deflection_limit], 'r--', 'LineWidth', 1.5);
+    xlabel('Distance from Support (m)');
+    ylabel('Deflection (mm)');
+    title('Deflection Curve');
+    legend('Deflection', 'Limit', 'Location', 'best');
+    grid on;
+    
+    % Plot stress distribution
+    subplot(2,2,4);
+    plot_stress_distribution(results(selected_idx, 8), web_height, flange_thickness, M_max, results(selected_idx, 4)*1e9);
+    title('Stress Distribution at Max Moment');
+end
+
+%% Summary Report
+if ~isempty(valid_idx)
+    fprintf('\n========================================\n');
+    fprintf('       DESIGN SUMMARY REPORT\n');
+    fprintf('========================================\n');
+    fprintf('Project: Cantilever T-Section Design\n');
+    fprintf('Code: CSA S16-24\n');
+    fprintf('Date: %s\n\n', datestr(now));
+    
+    fprintf('FINAL SECTION:\n');
+    fprintf('- Flange: %d mm × %d mm\n', total_width, flange_thickness);
+    fprintf('- Web: %d × (%d mm × %d mm)\n', num_webs, selected_web_t, web_height);
+    fprintf('- Total Depth: %d mm\n', web_height + flange_thickness);
+    fprintf('- Section Class: %d\n\n', results(selected_idx, 5));
+    
+    fprintf('CAPACITY CHECKS:\n');
+    fprintf('- Moment: %.1f%% utilized\n', (M_max/1e6)/results(selected_idx, 6) * 100);
+    fprintf('- Shear: %.1f%% utilized\n', (V_max/1000)/Vr * 100);
+    fprintf('- Deflection: %.1f%% of limit\n', results(selected_idx, 7)/deflection_limit * 100);
+    
+    fprintf('\nWELDING:\n');
+    fprintf('- Fillet weld size: %d mm\n', weld_size);
+    if weld_required < 0.5*weld_resistance
+        fprintf('- Type: Intermittent\n');
+    else
+        fprintf('- Type: Continuous\n');
+    end
+end
+
+%% Function Definitions
+
+function [props] = calculate_T_section_properties(tf, bf, hw, tw, n_webs, spacing)
+    % Calculate section properties for multi-web T-section
+    
+    % Areas
+    A_flange = bf * tf;
+    A_web = n_webs * tw * hw;
+    A_total = A_flange + A_web;
+    
+    % Centroid location (from bottom of web)
+    y_bar = (A_flange * (hw + tf/2) + A_web * hw/2) / A_total;
+    
+    % Moment of inertia about centroidal axis
+    Ix_flange = bf * tf^3 / 12 + A_flange * (hw + tf/2 - y_bar)^2;
+    Ix_web = n_webs * tw * hw^3 / 12 + A_web * (hw/2 - y_bar)^2;
+    Ix = Ix_flange + Ix_web;
+    
+    % Section moduli
+    y_top = hw + tf - y_bar;
+    y_bot = y_bar;
+    Sx_top = Ix / y_top;
+    Sx_bot = Ix / y_bot;
+    Sx = min(Sx_top, Sx_bot); % Conservative approach
+    
+    % Plastic section modulus (approximate)
+    % Location of plastic neutral axis
+    if A_flange >= A_web
+        % PNA in flange
+        y_pna = hw + (A_total / 2 - A_web) / bf;
+    else
+        % PNA in web
+        y_pna = A_total / (2 * n_webs * tw);
+    end
+    
+    % Calculate first moment of areas
+    if y_pna > hw
+        % PNA in flange
+        Q_top = bf * (hw + tf - y_pna)^2 / 2;
+        Q_bot = n_webs * tw * hw^2 / 2 + bf * (y_pna - hw)^2 / 2;
+    else
+        % PNA in web
+        Q_top = bf * tf * (hw + tf/2 - y_pna) + n_webs * tw * (hw - y_pna)^2 / 2;
+        Q_bot = n_webs * tw * y_pna^2 / 2;
+    end
+    
+    Zx = Q_top + Q_bot;
+    
+    % Lateral torsional properties (simplified)
+    Iy = tf * bf^3 / 12 + n_webs * hw * tw^3 / 12;
+    
+    % Warping constant (approximate for T-section)
+    Cw = Iy * (hw + tf)^2 / 4;
+    
+    % Torsional constant
+    J = (bf * tf^3 + n_webs * hw * tw^3) / 3;
+    
+    % Store properties
+    props.A = A_total;
+    props.Ix = Ix;
+    props.Iy = Iy;
+    props.Sx = Sx;
+    props.Zx = Zx;
+    props.y_bar = y_bar;
+    props.J = J;
+    props.Cw = Cw;
+end
+
+function [class, checks] = check_section_class_CSA(tf, bf, hw, tw, n_webs, Fy, props)
+    % Check section classification per CSA S16-24
+    
+    % Flange slenderness
+    b_f = (bf - n_webs * tw) / (2 * n_webs); % Outstand
+    lambda_f = b_f / tf;
+    
+    % Flange classification
+    if lambda_f <= 145/sqrt(Fy)
+        class_f = 1;
+    elseif lambda_f <= 170/sqrt(Fy)
+        class_f = 2;
+    elseif lambda_f <= 200/sqrt(Fy)
+        class_f = 3;
+    else
+        class_f = 4;
+    end
+    
+    % Web slenderness
+    h_c = hw + tf - props.y_bar; % Height in compression
+    if h_c > 0
+        lambda_w = h_c / tw;
+        
+        % Web classification (in flexural compression)
+        if lambda_w <= 1100/sqrt(Fy)
+            class_w = 1;
+        elseif lambda_w <= 1700/sqrt(Fy)
+            class_w = 2;
+        elseif lambda_w <= 1900/sqrt(Fy)
+            class_w = 3;
+        else
+            class_w = 4;
+        end
+    else
+        lambda_w = 0; % Web entirely in tension
+        class_w = 1; % Web entirely in tension
+    end
+    
+    % Overall classification (governs by worst element)
+    class = max(class_f, class_w);
+    
+    % Store checks
+    checks.lambda_f = lambda_f;
+    checks.lambda_w = lambda_w;
+    checks.class_f = class_f;
+    checks.class_w = class_w;
+end
+
+function delta = calculate_deflection(P, L, a, E, Ix)
+    % Calculate maximum deflection for cantilever with point load
+    % Maximum deflection occurs at free end
+    
+    if a == 0
+        % Load at free end
+        delta = P * L^3 / (3 * E * Ix) * 1000; % Convert to mm
+    else
+        % Load at distance 'a' from free end
+        delta = P * (L - a)^2 * (3*L - (L - a)) / (6 * E * Ix) * 1000; % mm
+    end
+end
+
+function plot_T_section(tf, bf, hw, tw, n_webs)
+    % Plot T-section cross-section
+    
+    % Calculate web positions
+    if n_webs == 1
+        web_pos = bf/2;
+    else
+        web_pos = linspace(tw/2, bf - tw/2, n_webs);
+    end
+    
+    % Plot flange
+    rectangle('Position', [0, hw, bf, tf], 'FaceColor', [0.8, 0.8, 0.8], 'EdgeColor', 'k', 'LineWidth', 1.5);
+    hold on;
+    
+    % Plot webs
+    for i = 1:n_webs
+        rectangle('Position', [web_pos(i) - tw/2, 0, tw, hw], 'FaceColor', [0.8, 0.8, 0.8], 'EdgeColor', 'k', 'LineWidth', 1.5);
+    end
+    
+    axis equal;
+    xlim([-50, bf + 50]);
+    ylim([-20, hw + tf + 20]);
+    xlabel('Width (mm)');
+    ylabel('Height (mm)');
+    grid on;
+end
+
+function plot_stress_distribution(y_bar, hw, tf, M, Ix)
+    % Plot stress distribution through depth
+    
+    y = linspace(0, hw + tf, 100);
+    sigma = M * (y - y_bar) / Ix;
+    
+    plot(sigma, y, 'b-', 'LineWidth', 2);
+    hold on;
+    plot([0, 0], [0, hw + tf], 'k--');
+    plot(xlim, [y_bar, y_bar], 'r--', 'LineWidth', 1.5);
+    
+    xlabel('Stress (MPa)');
+    ylabel('Height from Bottom (mm)');
+    legend('Stress', 'Zero Stress', 'Neutral Axis', 'Location', 'best');
+    grid on;
+end
+
+fprintf('\n=== ANALYSIS COMPLETE ===\n');
