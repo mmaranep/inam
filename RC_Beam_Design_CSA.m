@@ -3,8 +3,28 @@
 % and deflection. This script performs a complete design analysis for a
 % simply supported rectangular beam under uniform loading.
 %
-% Units: mm for geometry, kN for forces, MPa for stress
-% Standard: CSA A23.3-19
+% UNITS:
+%   - Geometry: mm (millimeters)
+%   - Forces: kN (kilonewtons)
+%   - Stress: MPa (megapascals)
+%   - Loads: kN/m (kilonewtons per meter)
+%   - Moments: kN·m (kilonewton-meters)
+%
+% DESIGN STANDARD: CSA A23.3-19 (Design of Concrete Structures)
+%
+% METHODOLOGY:
+%   - Flexural design: Direct quadratic formula (no iteration)
+%   - Shear design: Simplified method per Cl. 11.3.4
+%   - Deflection: Effective moment of inertia method per Cl. 9.8.4
+%
+% UNIT CONVERSION NOTES:
+%   - 1 kN/m = 1 N/mm (useful equivalence for calculations)
+%   - 1 kN·m = 1,000,000 N·mm
+%   - Span conversions: mm ÷ 1000 = m, m × 1000 = mm
+%
+% AUTHOR: Generated for CSA A23.3-19 compliance
+% VERSION: 2.0 - Unit conversions clarified, direct solution implemented
+% DATE: 2024
 
 clear; close all; clc;
 
@@ -38,6 +58,13 @@ mat.phi_s = 0.85;                % resistance factor for steel
 load_factors.alpha_D = 1.25;     % dead load factor
 load_factors.alpha_L = 1.5;      % live load factor
 
+% Unit conversion factors (for clarity and robustness)
+units.mm_to_m = 1e-3;            % convert mm to m
+units.m_to_mm = 1e3;             % convert m to mm
+units.Nmm_to_kNm = 1e-6;         % convert N·mm to kN·m
+units.kNm_to_Nmm = 1e6;          % convert kN·m to N·mm
+units.kN_per_m_to_N_per_mm = 1;  % 1 kN/m = 1 N/mm
+
 % Reinforcement options
 rebar.flexural_bar = 25;         % 25M bar for flexural reinforcement
 rebar.stirrup_bar = 10;          % 10M stirrups for shear
@@ -55,7 +82,16 @@ bar_db.diameter = [11.3, 16.0, 19.5, 25.2, 29.9, 35.7, 43.7];  % mm
 
 fprintf('\n========================================\n');
 fprintf('RC BEAM DESIGN PER CSA A23.3-19\n');
+fprintf('========================================\n');
+fprintf('Version 2.0 - Direct Solution Method\n');
 fprintf('========================================\n\n');
+
+fprintf('DESIGN APPROACH\n');
+fprintf('---------------\n');
+fprintf('• Flexural: Direct quadratic formula (no iteration)\n');
+fprintf('• Shear: Simplified method (CSA Cl. 11.3.4)\n');
+fprintf('• Deflection: Effective Ie method (CSA Cl. 9.8.4)\n');
+fprintf('• Units: mm for geometry, kN for forces, MPa for stress\n\n');
 
 fprintf('GEOMETRY\n');
 fprintf('--------\n');
@@ -125,8 +161,20 @@ loads.wf = load_factors.alpha_D * loads.DL + load_factors.alpha_L * loads.LL;
 loads.ws = loads.DL + loads.LL;  % kN/m
 
 % Maximum moment and shear for simply supported beam
-analysis.Mf_max = loads.wf * beam.span^2 / 8 / 1e6;  % kN·m (span in mm, convert to m)
-analysis.Vf_max = loads.wf * beam.span / 2 / 1e3;    % kN (span in mm, convert to m)
+% METHOD 1: Convert span to meters for calculation
+% M = w * L^2 / 8, where w is in kN/m and L is in m
+analysis.Mf_max = loads.wf * (beam.span * units.mm_to_m)^2 / 8;  % kN·m
+
+% V = w * L / 2, where w is in kN/m and L is in m
+analysis.Vf_max = loads.wf * (beam.span * units.mm_to_m) / 2;    % kN
+
+% Validation: Check for reasonable values
+if analysis.Mf_max < 0 || analysis.Mf_max > 10000
+    warning('Calculated moment (%.2f kN·m) seems unrealistic. Check input values.', analysis.Mf_max);
+end
+if analysis.Vf_max < 0 || analysis.Vf_max > 5000
+    warning('Calculated shear (%.2f kN) seems unrealistic. Check input values.', analysis.Vf_max);
+end
 
 fprintf('INTERNAL FORCES (FACTORED)\n');
 fprintf('--------------------------\n');
@@ -161,38 +209,77 @@ fprintf('ρ_min:                       %.6f\n', flex.rho_min);
 fprintf('ρ_balanced:                  %.6f\n', flex.rho_balanced);
 fprintf('ρ_max (tension-controlled):  %.6f\n\n', flex.rho_max);
 
-% Required steel area using direct quadratic solution
+% Required steel area using DIRECT QUADRATIC SOLUTION (no iteration needed)
 % For rectangular section: Mr = phi_s * As * fy * (d - a/2)
 % where a = phi_s * As * fy / (phi_c * 0.85 * fc' * b)
-% Rearranging: Mr = phi_s * As * fy * d - (phi_s * As * fy)^2 / (2 * phi_c * 0.85 * fc' * b)
-% This is quadratic in As: A*As^2 + B*As + C = 0
+% Substituting and rearranging: A*As^2 + B*As + C = 0
+% where:
+%   A = (phi_s * fy)^2 / (2 * phi_c * 0.85 * fc' * b)
+%   B = -phi_s * fy * d
+%   C = Mf (applied factored moment)
 
-Mf_Nmm = analysis.Mf_max * 1e6;  % Convert kN·m to N·mm
+% Convert moment to N·mm for consistency with mm dimensions
+Mf_Nmm = analysis.Mf_max * units.kNm_to_Nmm;  % Convert kN·m to N·mm
 
-% Coefficients of quadratic equation
+fprintf('DIRECT SOLUTION FOR REQUIRED STEEL AREA\n');
+fprintf('---------------------------------------\n');
+fprintf('Using quadratic formula (no iteration)\n');
+fprintf('Applied moment:              %.2f kN·m (%.0f N·mm)\n\n', analysis.Mf_max, Mf_Nmm);
+
+% Coefficients of quadratic equation: A*As^2 + B*As + C = 0
 A_coef = (mat.phi_s * mat.fy_flexural)^2 / (2 * mat.phi_c * 0.85 * mat.fc_prime * beam.width);
 B_coef = -mat.phi_s * mat.fy_flexural * beam.d;
 C_coef = Mf_Nmm;
 
-% Solve quadratic equation
+% Calculate discriminant
 discriminant = B_coef^2 - 4 * A_coef * C_coef;
 
+fprintf('Quadratic coefficients:\n');
+fprintf('  A = %.6e\n', A_coef);
+fprintf('  B = %.6e\n', B_coef);
+fprintf('  C = %.6e\n', C_coef);
+fprintf('  Discriminant = %.6e\n\n', discriminant);
+
+% Check discriminant (must be non-negative for real solutions)
 if discriminant < 0
-    error('Negative discriminant - section cannot carry the applied moment. Increase section size.');
+    error(['DESIGN ERROR: Negative discriminant (%.2e)\n' ...
+           'The section cannot carry the applied moment.\n' ...
+           'SOLUTIONS:\n' ...
+           '  1. Increase beam depth (current: %d mm)\n' ...
+           '  2. Increase beam width (current: %d mm)\n' ...
+           '  3. Increase concrete strength (current: %.0f MPa)\n' ...
+           '  4. Use compression reinforcement\n'], ...
+           discriminant, beam.depth, beam.width, mat.fc_prime);
 end
 
+% Solve quadratic equation: As = (-B ± sqrt(B^2 - 4AC)) / (2A)
 As_req_1 = (-B_coef + sqrt(discriminant)) / (2 * A_coef);
 As_req_2 = (-B_coef - sqrt(discriminant)) / (2 * A_coef);
 
-% Choose the smaller positive root
+fprintf('Quadratic solutions:\n');
+fprintf('  As_1 = %.1f mm² (root 1)\n', As_req_1);
+fprintf('  As_2 = %.1f mm² (root 2)\n\n', As_req_2);
+
+% Choose the smaller positive root (both should be positive for valid design)
 if As_req_1 > 0 && As_req_2 > 0
     flex.As_req = min(As_req_1, As_req_2);
+    fprintf('Selected smaller positive root: %.1f mm²\n\n', flex.As_req);
 elseif As_req_1 > 0
     flex.As_req = As_req_1;
+    fprintf('Selected root 1 (only positive solution): %.1f mm²\n\n', flex.As_req);
 elseif As_req_2 > 0
     flex.As_req = As_req_2;
+    fprintf('Selected root 2 (only positive solution): %.1f mm²\n\n', flex.As_req);
 else
-    error('No positive solution for required steel area. Check input parameters.');
+    error(['DESIGN ERROR: No positive solution for required steel area.\n' ...
+           'Both roots are negative: As_1 = %.1f mm², As_2 = %.1f mm²\n' ...
+           'This indicates a fundamental problem with input parameters.\n'], ...
+           As_req_1, As_req_2);
+end
+
+% Validation: Check if steel area is reasonable
+if flex.As_req < 100 || flex.As_req > 50000
+    warning('Calculated steel area (%.1f mm²) seems unrealistic. Verify design parameters.', flex.As_req);
 end
 
 % Calculate corresponding reinforcement ratio and neutral axis depth
@@ -407,7 +494,8 @@ fprintf('DEFLECTION CHECK\n');
 fprintf('========================================\n\n');
 
 % Service load moment at midspan
-defl.Ms = loads.ws * (beam.span/1000)^2 / 8;  % kN·m
+% Convert span to meters for calculation with kN/m load
+defl.Ms = loads.ws * (beam.span * units.mm_to_m)^2 / 8;  % kN·m
 
 fprintf('SERVICE LOAD ANALYSIS\n');
 fprintf('---------------------\n');
@@ -516,16 +604,45 @@ fprintf('========================================\n');
 fprintf('DESIGN SUMMARY\n');
 fprintf('========================================\n\n');
 
-summaryTable = table(...
-    ["Moment"; "Shear"; "Deflection (Immediate)"; "Deflection (Long-term)"], ...
-    [analysis.Mf_max; analysis.Vf_max; defl.delta_immediate; defl.delta_longterm], ...
-    [flex.Mr; shear.Vr; defl.limit_immediate; defl.limit_longterm], ...
-    [analysis.Mf_max/flex.Mr; analysis.Vf_max/shear.Vr; ...
-     defl.delta_immediate/defl.limit_immediate; defl.delta_longterm/defl.limit_longterm], ...
-    ["PASS"; "PASS"; string(defl.immediate_pass); string(defl.longterm_pass)], ...
-    'VariableNames', {'Check', 'Demand', 'Capacity', 'Ratio', 'Status'});
+% Create status strings (compatible with both MATLAB and Octave)
+if defl.immediate_pass
+    status_immediate = 'PASS';
+else
+    status_immediate = 'FAIL';
+end
 
-disp(summaryTable);
+if defl.longterm_pass
+    status_longterm = 'PASS';
+else
+    status_longterm = 'FAIL';
+end
+
+% Try to create table (MATLAB only, skip in Octave)
+try
+    summaryTable = table(...
+        ["Moment"; "Shear"; "Deflection (Immediate)"; "Deflection (Long-term)"], ...
+        [analysis.Mf_max; analysis.Vf_max; defl.delta_immediate; defl.delta_longterm], ...
+        [flex.Mr; shear.Vr; defl.limit_immediate; defl.limit_longterm], ...
+        [analysis.Mf_max/flex.Mr; analysis.Vf_max/shear.Vr; ...
+         defl.delta_immediate/defl.limit_immediate; defl.delta_longterm/defl.limit_longterm], ...
+        ["PASS"; "PASS"; status_immediate; status_longterm], ...
+        'VariableNames', {'Check', 'Demand', 'Capacity', 'Ratio', 'Status'});
+    
+    disp(summaryTable);
+catch
+    % Fallback for Octave or if table() is not available
+    fprintf('\n%-25s %12s %12s %10s %8s\n', 'Check', 'Demand', 'Capacity', 'Ratio', 'Status');
+    fprintf('%s\n', repmat('-', 1, 70));
+    fprintf('%-25s %12.2f %12.2f %10.3f %8s\n', 'Moment', analysis.Mf_max, flex.Mr, ...
+            analysis.Mf_max/flex.Mr, 'PASS');
+    fprintf('%-25s %12.2f %12.2f %10.3f %8s\n', 'Shear', analysis.Vf_max, shear.Vr, ...
+            analysis.Vf_max/shear.Vr, 'PASS');
+    fprintf('%-25s %12.2f %12.2f %10.3f %8s\n', 'Deflection (Immediate)', defl.delta_immediate, ...
+            defl.limit_immediate, defl.delta_immediate/defl.limit_immediate, status_immediate);
+    fprintf('%-25s %12.2f %12.2f %10.3f %8s\n', 'Deflection (Long-term)', defl.delta_longterm, ...
+            defl.limit_longterm, defl.delta_longterm/defl.limit_longterm, status_longterm);
+    fprintf('\n');
+end
 
 fprintf('\nREINFORCEMENT DETAILS\n');
 fprintf('---------------------\n');
@@ -548,11 +665,16 @@ x = linspace(0, beam.span, n_points);  % mm
 % M(x) = w*x*(L-x)/2
 % V(x) = w*L/2 - w*x
 
-M_x = loads.wf * x .* (beam.span - x) / 2 / 1e6;  % kN·m
-V_x = loads.wf * beam.span / 2 / 1e3 - loads.wf * x / 1e3;  % kN
+% Convert positions to meters for calculation
+x_m = x * units.mm_to_m;  % m
+L_m = beam.span * units.mm_to_m;  % m
+
+% Factored load diagrams
+M_x = loads.wf * x_m .* (L_m - x_m) / 2;  % kN·m
+V_x = loads.wf * L_m / 2 - loads.wf * x_m;  % kN
 
 % Service load moment for deflection calculations
-Ms_x = loads.ws * x .* (beam.span - x) / 2 / 1e6;  % kN·m
+Ms_x = loads.ws * x_m .* (L_m - x_m) / 2;  % kN·m
 
 % Create figure with subplots
 figure('Name', 'RC Beam Analysis Diagrams', 'Color', 'w', 'Position', [100, 100, 1200, 800]);
@@ -615,8 +737,8 @@ xlim([-200, beam.span + 200]);
 subplot(3, 2, 3);
 hold on; grid on;
 plot(x/1000, M_x, 'b-', 'LineWidth', 2);
-yline(flex.Mr, 'r--', 'LineWidth', 1.5);
-yline(0, 'k-', 'LineWidth', 0.5);
+plot([0, beam.span/1000], [flex.Mr, flex.Mr], 'r--', 'LineWidth', 1.5);
+plot([0, beam.span/1000], [0, 0], 'k-', 'LineWidth', 0.5);
 xlabel('Position along span (m)');
 ylabel('Moment (kN·m)');
 title('Bending Moment Diagram (Factored Load)', 'FontWeight', 'bold');
@@ -627,8 +749,8 @@ ylim([min(M_x)*1.2, max([max(M_x), flex.Mr])*1.2]);
 subplot(3, 2, 4);
 hold on; grid on;
 plot(x/1000, Ms_x, 'g-', 'LineWidth', 2);
-yline(defl.Mcr, 'm--', 'LineWidth', 1.5);
-yline(0, 'k-', 'LineWidth', 0.5);
+plot([0, beam.span/1000], [defl.Mcr, defl.Mcr], 'm--', 'LineWidth', 1.5);
+plot([0, beam.span/1000], [0, 0], 'k-', 'LineWidth', 0.5);
 xlabel('Position along span (m)');
 ylabel('Moment (kN·m)');
 title('Bending Moment Diagram (Service Load)', 'FontWeight', 'bold');
@@ -639,11 +761,11 @@ ylim([min(Ms_x)*1.2, max([max(Ms_x), defl.Mcr])*1.2]);
 subplot(3, 2, 5);
 hold on; grid on;
 plot(x/1000, V_x, 'b-', 'LineWidth', 2);
-yline(shear.Vr, 'r--', 'LineWidth', 1.5);
-yline(shear.Vc, 'g--', 'LineWidth', 1.5);
-yline(0, 'k-', 'LineWidth', 0.5);
-yline(-shear.Vr, 'r--', 'LineWidth', 1.5);
-yline(-shear.Vc, 'g--', 'LineWidth', 1.5);
+plot([0, beam.span/1000], [shear.Vr, shear.Vr], 'r--', 'LineWidth', 1.5);
+plot([0, beam.span/1000], [shear.Vc, shear.Vc], 'g--', 'LineWidth', 1.5);
+plot([0, beam.span/1000], [0, 0], 'k-', 'LineWidth', 0.5);
+plot([0, beam.span/1000], [-shear.Vr, -shear.Vr], 'r--', 'LineWidth', 1.5);
+plot([0, beam.span/1000], [-shear.Vc, -shear.Vc], 'g--', 'LineWidth', 1.5);
 xlabel('Position along span (m)');
 ylabel('Shear Force (kN)');
 title('Shear Force Diagram', 'FontWeight', 'bold');
@@ -665,8 +787,8 @@ s_spacing = [shear.s_at_support, shear.s_at_support, shear.s_provided, ...
              shear.s_provided, shear.s_at_support, shear.s_at_support];
 
 plot(x_spacing, s_spacing, 'b-', 'LineWidth', 2);
-yline(shear.s_max, 'r--', 'LineWidth', 1.5);
-yline(shear.s_min, 'g--', 'LineWidth', 1.5);
+plot([0, beam.span/1000], [shear.s_max, shear.s_max], 'r--', 'LineWidth', 1.5);
+plot([0, beam.span/1000], [shear.s_min, shear.s_min], 'g--', 'LineWidth', 1.5);
 
 xlabel('Position along span (m)');
 ylabel('Stirrup Spacing (mm)');
